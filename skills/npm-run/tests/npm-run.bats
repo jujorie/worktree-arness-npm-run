@@ -1242,7 +1242,7 @@ no_node_path() {
 }
 
 # nokill_script [zombie]: npm-run.sh with a KILL that does nothing (a process that survives it, like one
-# in uninterruptible sleep), on any OS. The script is sourced, so `kill` and `proc_args` are these
+# in uninterruptible sleep), on Linux and macOS (in Git Bash, taskkill ends the tree before the KILL). The script is sourced, so `kill` and `proc_args` are these
 # functions, not the builtin and the script's. With zombie, after the KILL the wrapper shows as ps shows a
 # zombie nobody reaped yet ([bash] <defunct>): still there for kill -0, but no longer running.
 nokill_script() {
@@ -1260,6 +1260,7 @@ EOF
 }
 
 @test "worktree-remove exits 14 with STOP_FAILED and keeps the pid when a script survives KILL" {
+  [ ! -r "/proc/$$/winpid" ] || skip "Git Bash ends the tree with taskkill before the KILL"
   add_script stubborn "trap '' TERM; sleep 30"
   "$SCRIPT" run stubborn >/dev/null
   pid="$(cat "$(state a/feat/x)/stubborn.pid")"
@@ -1275,6 +1276,7 @@ EOF
 }
 
 @test "a wrapper left as a zombie after KILL counts as stopped: STOPPED, exit 0" {
+  [ ! -r "/proc/$$/winpid" ] || skip "Git Bash ends the tree with taskkill before the KILL"
   add_script stubborn "trap '' TERM; sleep 30"
   "$SCRIPT" run stubborn >/dev/null
   pid="$(cat "$(state a/feat/x)/stubborn.pid")"
