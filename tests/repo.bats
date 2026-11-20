@@ -77,13 +77,15 @@ AGENTSKILLS_VALIDATOR="skills-ref==0.1.1"
 }
 
 @test "the worktree-remove hook accepts its subcommand" {
-  local cmd
+  local cmd path
   cmd="$(awk -F= '$1 == "hook.worktree-remove" { sub(/^[^=]*=/, ""); print }' "$REPO_ROOT/arness-plugin.conf")"
   [ -n "$cmd" ] || { echo "no hook.worktree-remove"; false; }
   # A worktree with no npm-run state: the hook does nothing and succeeds; an unknown subcommand would be 2.
   root="$(mktemp -d)"
-  # shellcheck disable=SC2086 # literal words from the manifest
-  run env ARNESS_ROOT="$root" $REPO_ROOT/$cmd r/w
+  path="${cmd%% *}"
+  # shellcheck disable=SC2086 # the arguments are literal words of the manifest
+  set -- ${cmd#"$path"}
+  run env ARNESS_ROOT="$root" "$REPO_ROOT/$path" "$@" r/w
   rm -rf "$root"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ -z "$output" ]

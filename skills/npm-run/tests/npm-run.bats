@@ -1241,13 +1241,19 @@ no_node_path() {
   [ "$output" = "CLEANED r/w s.log" ]
 }
 
-# nokill_script: npm-run.sh with a KILL that does nothing (a process that survives it, like one in
-# uninterruptible sleep), on any OS. The script is sourced, so `kill` is this function, not the builtin.
+# nokill_script [zombie]: npm-run.sh with a KILL that does nothing (a process that survives it, like one
+# in uninterruptible sleep), on any OS. The script is sourced, so `kill` and `proc_args` are these
+# functions, not the builtin and the script's. With zombie, after the KILL the wrapper shows as ps shows a
+# zombie nobody reaped yet ([bash] <defunct>): still there for kill -0, but no longer running.
 nokill_script() {
   cat > "$TMP/nokill.sh" <<EOF
 #!/usr/bin/env bash
 . "$SCRIPT"
-kill() { if [ "\$1" = -KILL ]; then return 0; fi; builtin kill "\$@"; }
+kill() { if [ "\$1" = -KILL ]; then : > "$TMP/killed"; return 0; fi; builtin kill "\$@"; }
+if [ "${1:-}" = zombie ]; then
+  eval "real_proc_args() \$(declare -f proc_args | sed 1d)"
+  proc_args() { if [ -e "$TMP/killed" ]; then echo "[bash] <defunct>"; else real_proc_args "\$@"; fi; }
+fi
 main "\$@"
 EOF
   chmod +x "$TMP/nokill.sh"
@@ -1266,4 +1272,17 @@ EOF
   [[ "$output" != *STOPPED* ]] || false
   [ -e "$(state a/feat/x)/stubborn.pid" ]
   kill -0 "$pid"
+}
+
+@test "a wrapper left as a zombie after KILL counts as stopped: STOPPED, exit 0" {
+  add_script stubborn "trap '' TERM; sleep 30"
+  "$SCRIPT" run stubborn >/dev/null
+  pid="$(cat "$(state a/feat/x)/stubborn.pid")"
+  sleep 0.5
+  nokill_script zombie
+  run "$TMP/nokill.sh" worktree-remove a/feat/x
+  # The process itself still runs (the KILL did nothing): end it here, teardown no longer sees its pid.
+  kill -KILL -- "-$pid" 2>/dev/null || true
+  [ "$status" -eq 0 ]
+  [ "$output" = "STOPPED a/feat/x stubborn $pid" ]
 }

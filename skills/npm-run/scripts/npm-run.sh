@@ -587,14 +587,15 @@ stop_pid() {
   fi
   kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
   # The wrapper lives until npm ends, and npm until its script ends: a child that ignores TERM keeps the
-  # leader alive, and gets the KILL to the group.
+  # leader alive, and gets the KILL to the group. pid_alive, not kill -0: a wrapper left as a zombie (its
+  # new parent has not reaped it yet, e.g. a container whose PID 1 does not) has ended.
   for _ in $(seq 50); do
-    kill -0 "$pid" 2>/dev/null || return 0
+    pid_alive "$pid" || return 0
     sleep 0.1
   done
   kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
   for _ in $(seq 20); do
-    kill -0 "$pid" 2>/dev/null || return 0
+    pid_alive "$pid" || return 0
     sleep 0.1
   done
   echo "warning: $pid still runs after KILL" >&2
