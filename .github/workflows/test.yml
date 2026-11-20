@@ -1,0 +1,25 @@
+name: test
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install tools (ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bats shellcheck jq
+      - name: Install tools (macos)
+        if: runner.os == 'macOS'
+        run: brew install bats-core shellcheck jq
+      - run: ./scripts/test.sh

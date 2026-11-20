@@ -1,0 +1,7 @@
+.memory/
+.vscode/
+.claude/*
+!.claude/skills
+*.bak
+/tmp/
+/.env
