@@ -90,7 +90,7 @@ skills/npm-run/scripts/npm-run.sh scripts [--worktree <repo>/<name>]   # SCRIPT 
 
 Files live in `tmp/npm-run/<repo>/<name>/`. `stop` removes the pid, log and code of what it stops, plus the `install.log` and folders left empty. A script that ended by itself (`FINISHED`, `EXITED`) keeps its log and code, the only record of what happened. Read them first if they matter, then `clean` removes the logs, codes and pids of everything that no longer runs and the empty folders (`CLEANED <slug> <file>` per file). It never touches what still runs.
 
-`worktree-remove <repo>/<name>` is the plugin's arness hook: arness runs it before it removes a worktree, to stop what runs there. Never call it yourself; use `stop`.
+`worktree-remove <repo>/<name>` is the plugin's arness hook: arness runs it before it removes a worktree, to stop what runs there. It prints the `STOPPED` and `STOP_FAILED` lines of `stop` and exits 14 on a `STOP_FAILED`, so arness keeps the worktree. Never call it yourself; use `stop`. Known limit: a script started in that worktree while the hook runs is not stopped; do not run scripts in a worktree that is being removed.
 
 ## Rules
 

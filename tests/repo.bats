@@ -62,3 +62,29 @@ AGENTSKILLS_VALIDATOR="skills-ref==0.1.1"
     done
   done < <(skill_dirs)
 }
+
+@test "every hook in arness-plugin.conf points to an executable script of the plugin" {
+  local line path n=0
+  while IFS= read -r line; do
+    case "$line" in hook.*=*) ;; *) continue ;; esac
+    n=$((n + 1))
+    path="${line#*=}"
+    path="${path%% *}"
+    [ -f "$REPO_ROOT/$path" ] || { echo "${line%%=*}: $path not found"; false; }
+    [ -x "$REPO_ROOT/$path" ] || { echo "${line%%=*}: $path not executable"; false; }
+  done < "$REPO_ROOT/arness-plugin.conf"
+  [ "$n" -gt 0 ] || { echo "no hook in arness-plugin.conf"; false; }
+}
+
+@test "the worktree-remove hook accepts its subcommand" {
+  local cmd
+  cmd="$(awk -F= '$1 == "hook.worktree-remove" { sub(/^[^=]*=/, ""); print }' "$REPO_ROOT/arness-plugin.conf")"
+  [ -n "$cmd" ] || { echo "no hook.worktree-remove"; false; }
+  # A worktree with no npm-run state: the hook does nothing and succeeds; an unknown subcommand would be 2.
+  root="$(mktemp -d)"
+  # shellcheck disable=SC2086 # literal words from the manifest
+  run env ARNESS_ROOT="$root" $REPO_ROOT/$cmd r/w
+  rm -rf "$root"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ -z "$output" ]
+}

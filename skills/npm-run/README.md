@@ -9,6 +9,7 @@ run   ─ checks (worktree, package.json, script, node_modules, .nvmrc node) →
 wait  ─ until <script>.code appears → FINISHED <code> | TIMEOUT
 ps / stop / clean / scripts
 worktree-remove <repo>/<name> ─ arness hook: stop what runs there before the worktree is removed
+                                (STOPPED / STOP_FAILED lines; exit 14 keeps the worktree)
 ```
 
 ## Files

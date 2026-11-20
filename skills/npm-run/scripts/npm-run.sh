@@ -19,8 +19,9 @@
 # A bash wrapper leads the process group (its pid is the one saved): it runs npm, then writes npm's exit
 # code to <script>.code, also after npm-run itself returned. A new run removes the old .code first. The
 # wrapper passes TERM and INT on to npm and lives until npm ends, so the saved pid runs as long
-# as npm does. stop sends TERM to the group, waits up to 5 s for the wrapper, then KILL to the group; it
-# removes the .code the wrapper saved, so a stopped script leaves none.
+# as npm does. stop sends TERM to the group, waits up to 5 s for the wrapper, then KILL to the group; if
+# the wrapper still runs 2 s later, STOP_FAILED and its pid is kept. It removes the .code the wrapper saved,
+# so a stopped script leaves none.
 # Known limit: if npm dies by KILL and leaves a child alive, the wrapper exits and stop no longer sees that
 # child; end it by hand with `kill -- -<pid>` (the pid STARTED printed).
 # wait polls every second until <script>.code appears; default --timeout 540 s (under the 10 min an agent's
@@ -29,9 +30,12 @@
 # ${XDG_CONFIG_HOME:-~/.config}/nvm) or nvm-windows (NVM_HOME), first in PATH for them only; 22 and 22.x pick
 # the highest 22.x installed. With nvm and the version missing: NO_NODE_VERSION; no nvm: a warning.
 # worktree-remove is the plugin's arness hook (hook.worktree-remove in arness-plugin.conf): arness runs it
-# before it removes a worktree. It stops what npm-run started there, prints only the STOPPED lines (nothing
-# when it started nothing there) and exits non-zero when something could not be stopped, so arness keeps
-# the worktree. Once its folder is gone, a dev server or watcher would keep running and holding its ports.
+# before it removes a worktree. It stops what npm-run started there and prints the STOPPED and STOP_FAILED
+# lines of stop (nothing when it started nothing there, never NONE); with a STOP_FAILED it exits 14, so
+# arness keeps the worktree and shows why. Once its folder is gone, a dev server or watcher would keep
+# running and holding its ports.
+# Known limit: a run started in the same worktree while the hook runs, after stop read the pid files, is
+# not stopped. Removing a worktree while another session starts scripts in it is not supported.
 # stop removes the pid and log of what it stops, and the install.log and folders left empty. A script
 # that ended by itself (FINISHED, EXITED) keeps its log until clean removes everything that no longer runs.
 #
@@ -565,7 +569,8 @@ forget() {
   prune_dirs "$dir"
 }
 
-# stop_pid <pid>: TERM to its process group, then KILL after 5 s. Returns 1 when it cannot end the tree.
+# stop_pid <pid>: TERM to its process group, then KILL after 5 s. Returns 1 when it cannot end the tree:
+# taskkill failed, or the leader still runs 2 s after the KILL (uninterruptible sleep, a KILL refused).
 stop_pid() {
   local pid="$1" out rc=0
   # Git Bash (Windows): end the Windows process tree first. When an MSYS shell stays as the parent of a
@@ -588,6 +593,12 @@ stop_pid() {
     sleep 0.1
   done
   kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+  for _ in $(seq 20); do
+    kill -0 "$pid" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  echo "warning: $pid still runs after KILL" >&2
+  return 1
 }
 
 cmd_stop() {
@@ -676,7 +687,8 @@ cmd_clean() {
 }
 
 # cmd_worktree_remove <repo>/<name>: the hook arness runs before removing a worktree. Stops what npm-run
-# started there and prints only its STOPPED lines; nothing to do when npm-run has no state for it.
+# started there and prints stop's STOPPED and STOP_FAILED lines, with its exit code (14 on STOP_FAILED);
+# nothing to do when npm-run has no state for it.
 cmd_worktree_remove() {
   [ $# -eq 1 ] || die "worktree-remove needs <repo>/<name>"
   validate_name "$1" || die "invalid worktree: '$1'"

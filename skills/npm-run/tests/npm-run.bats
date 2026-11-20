@@ -1240,3 +1240,30 @@ no_node_path() {
   [ "$status" -eq 0 ]
   [ "$output" = "CLEANED r/w s.log" ]
 }
+
+# nokill_script: npm-run.sh with a KILL that does nothing (a process that survives it, like one in
+# uninterruptible sleep), on any OS. The script is sourced, so `kill` is this function, not the builtin.
+nokill_script() {
+  cat > "$TMP/nokill.sh" <<EOF
+#!/usr/bin/env bash
+. "$SCRIPT"
+kill() { if [ "\$1" = -KILL ]; then return 0; fi; builtin kill "\$@"; }
+main "\$@"
+EOF
+  chmod +x "$TMP/nokill.sh"
+}
+
+@test "worktree-remove exits 14 with STOP_FAILED and keeps the pid when a script survives KILL" {
+  add_script stubborn "trap '' TERM; sleep 30"
+  "$SCRIPT" run stubborn >/dev/null
+  pid="$(cat "$(state a/feat/x)/stubborn.pid")"
+  sleep 0.5
+  nokill_script
+  run "$TMP/nokill.sh" worktree-remove a/feat/x
+  [ "$status" -eq 14 ]
+  [[ "$output" == *"STOP_FAILED a/feat/x stubborn $pid"* ]] || false
+  [[ "$output" == *"warning: $pid still runs after KILL"* ]] || false
+  [[ "$output" != *STOPPED* ]] || false
+  [ -e "$(state a/feat/x)/stubborn.pid" ]
+  kill -0 "$pid"
+}

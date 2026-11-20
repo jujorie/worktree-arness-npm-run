@@ -9,7 +9,7 @@ in the background, wait for their exit code, list, stop and clean them up.
 
 Before arness removes a worktree (`worktree-clean`), it runs the plugin's `hook.worktree-remove`, which stops the
 dev servers and watchers `npm-run` started there: once the folder is gone they would keep running and holding
-their ports. If they cannot be stopped, the worktree is kept.
+their ports. If one cannot be stopped (`STOP_FAILED`), the worktree is kept and arness shows that line.
 
 ## Install
 
